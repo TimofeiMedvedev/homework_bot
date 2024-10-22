@@ -39,8 +39,8 @@ console_handler = logging.StreamHandler()
 console_handler.setFormatter(
     logging.Formatter(
         '%(asctime)s - %(levelname)s - %(message)s - %(funcName)s - %(lineno)s'
-        )
     )
+)
 
 logger.addHandler(file_handler)
 logger.addHandler(console_handler)
