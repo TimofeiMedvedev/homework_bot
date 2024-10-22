@@ -1,3 +1,4 @@
+"""Константы для работы программы бот-ассистент."""
 RETRY_PERIOD = 600
 ENDPOINT = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
 # ENDPOINT = ''
@@ -8,4 +9,3 @@ HOMEWORK_VERDICTS = {
 }
 
 DAYS_30 = 30 * 86400
-# DAYS_30 = 0
