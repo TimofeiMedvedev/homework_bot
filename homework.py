@@ -13,27 +13,17 @@ from http import HTTPStatus
 
 import requests
 from dotenv import load_dotenv
-from telebot import TeleBot
+from telebot import TeleBot, telebot
 
 from constants import DAYS_30, ENDPOINT, HOMEWORK_VERDICTS, RETRY_PERIOD
 
 load_dotenv()
 
 
-TOKENS = {
-    'TELEGRAM_TOKEN': os.getenv('TELEGRAM_TOKEN'),
-    'PRACTICUM_TOKEN': os.getenv('PRACTICUM_TOKEN'),
-    'TELEGRAM_CHAT_ID': os.getenv('TELEGRAM_CHAT_ID')
-}
-# TELEGRAM_TOKEN = TOKENS['TELEGRAM_TOKEN']
-# PRACTICUM_TOKEN = TOKENS['PRACTICUM_TOKEN']
-# TELEGRAM_CHAT_ID = TOKENS['TELEGRAM_CHAT_ID']
-
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
 PRACTICUM_TOKEN = os.getenv('PRACTICUM_TOKEN')
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
-PRACTICUM_TOKEN = TOKENS['PRACTICUM_TOKEN']
 HEADERS = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
 homework_statuses = requests.get(
     ENDPOINT,
@@ -41,9 +31,6 @@ homework_statuses = requests.get(
     params={'from_date': int(time.time()) - DAYS_30}
 )
 
-# tokens = [key for key in [TELEGRAM_TOKEN, PRACTICUM_TOKEN, TELEGRAM_CHAT_ID] if key]
-# print(homework_statuses.json())
-# print(tokens)
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -66,22 +53,23 @@ logger.addHandler(file_handler)
 logger.addHandler(console_handler)
 
 
-# def check_tokens():
-#     """.
+def check_tokens():
+    """.
 
-#     Функция проверки наличия переменных окружения
-#     необходимых для работы программы.
-#     """
-      
-#     tokens = [key for key in TOKENS if TOKENS[key] is None]
-#     print(tokens)
-#     if tokens != []:
-#         logging.error((f'Недоступны переменные окружения: {tokens}'))
-#         return False
-#     return True
+    Функция проверки наличия переменных окружения
+    необходимых для работы программы.
+    """
+    tokens = {
+        'TELEGRAM_TOKEN': TELEGRAM_TOKEN,
+        'PRACTICUM_TOKEN': PRACTICUM_TOKEN,
+        'TELEGRAM_CHAT_ID': TELEGRAM_CHAT_ID
+    }
+    missing_token = [key for key in tokens if not tokens[key]]
+    if missing_token != []:
+        logging.error((f'Недоступны переменные окружения: {tokens}'))
+        return False
+    return True
    
-
-
 
 def send_message(bot, message):
     """.
@@ -92,10 +80,13 @@ def send_message(bot, message):
     """
     try:
         bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message)
+    except telebot.apihelper.ApiException and requests.RequestException:
+        return False
     except Exception as error:
         logger.error(f'сбой при отправке сообщения в Telegram: {error}')
     else:
         logger.debug('Сообщение успешно отправлено в Telegram')
+        return True
 
 
 def get_api_answer(timestamp):
@@ -189,24 +180,7 @@ def parse_status(homework):
     verdict = HOMEWORK_VERDICTS[status_homework]
 
     return f'Изменился статус проверки работы "{homework_name}". {verdict}'
-
-def check_tokens():
-    """.
-
-    Функция проверки наличия переменных окружения
-    необходимых для работы программы.
-    """
-    tokens = {
-        'TELEGRAM_TOKEN': TELEGRAM_TOKEN,
-        'PRACTICUM_TOKEN': PRACTICUM_TOKEN,
-        'TELEGRAM_CHAT_ID': TELEGRAM_CHAT_ID
-    }
-    token = [key for key in TOKENS if not tokens[key]]
-    if token != []:
-        logging.error((f'Недоступны переменные окружения: {tokens}'))
-        return False
-    return True
-   
+ 
 
 def main():
     """.
@@ -224,11 +198,6 @@ def main():
         sys.exit()
     bot = TeleBot(token=TELEGRAM_TOKEN)
     timestamp = int(time.time())
-    # if not check_tokens():
-    #     logger.critical(
-    #         'Отсутствие переменных окружения во время запуска бота'
-    #     )
-    #     sys.exit()
 
     while True:
         try:
