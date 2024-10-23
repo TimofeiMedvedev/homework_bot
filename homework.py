@@ -7,23 +7,43 @@
 
 import logging
 import os
-import requests
-import time
-from constants import RETRY_PERIOD, ENDPOINT, HOMEWORK_VERDICTS, DAYS_30
-from http import HTTPStatus
 import sys
+import time
+from http import HTTPStatus
 
-
+import requests
 from dotenv import load_dotenv
 from telebot import TeleBot
+
+from constants import DAYS_30, ENDPOINT, HOMEWORK_VERDICTS, RETRY_PERIOD
 
 load_dotenv()
 
 
-PRACTICUM_TOKEN = os.getenv('PRACTICUM_TOKEN')
+TOKENS = {
+    'TELEGRAM_TOKEN': os.getenv('TELEGRAM_TOKEN'),
+    'PRACTICUM_TOKEN': os.getenv('PRACTICUM_TOKEN'),
+    'TELEGRAM_CHAT_ID': os.getenv('TELEGRAM_CHAT_ID')
+}
+# TELEGRAM_TOKEN = TOKENS['TELEGRAM_TOKEN']
+# PRACTICUM_TOKEN = TOKENS['PRACTICUM_TOKEN']
+# TELEGRAM_CHAT_ID = TOKENS['TELEGRAM_CHAT_ID']
+
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
+PRACTICUM_TOKEN = os.getenv('PRACTICUM_TOKEN')
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
+
+PRACTICUM_TOKEN = TOKENS['PRACTICUM_TOKEN']
 HEADERS = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
+homework_statuses = requests.get(
+    ENDPOINT,
+    headers=HEADERS,
+    params={'from_date': int(time.time()) - DAYS_30}
+)
+
+# tokens = [key for key in [TELEGRAM_TOKEN, PRACTICUM_TOKEN, TELEGRAM_CHAT_ID] if key]
+# print(homework_statuses.json())
+# print(tokens)
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -35,7 +55,7 @@ file_handler.setFormatter(
     )
 )
 
-console_handler = logging.StreamHandler()
+console_handler = logging.StreamHandler(stream=sys.stdout)
 console_handler.setFormatter(
     logging.Formatter(
         '%(asctime)s - %(levelname)s - %(message)s - %(funcName)s - %(lineno)s'
@@ -46,17 +66,21 @@ logger.addHandler(file_handler)
 logger.addHandler(console_handler)
 
 
-def check_tokens():
-    """.
+# def check_tokens():
+#     """.
 
-    Функция проверки наличия переменных окружения
-    необходимых для работы программы.
-    """
-    tokens = [PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID]
-    if all(tokens):
-        return True
-    else:
-        return False
+#     Функция проверки наличия переменных окружения
+#     необходимых для работы программы.
+#     """
+      
+#     tokens = [key for key in TOKENS if TOKENS[key] is None]
+#     print(tokens)
+#     if tokens != []:
+#         logging.error((f'Недоступны переменные окружения: {tokens}'))
+#         return False
+#     return True
+   
+
 
 
 def send_message(bot, message):
@@ -68,9 +92,10 @@ def send_message(bot, message):
     """
     try:
         bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message)
-        logger.debug('Сообщение успешно отправлено в Telegram')
     except Exception as error:
         logger.error(f'сбой при отправке сообщения в Telegram: {error}')
+    else:
+        logger.debug('Сообщение успешно отправлено в Telegram')
 
 
 def get_api_answer(timestamp):
@@ -86,7 +111,7 @@ def get_api_answer(timestamp):
         homework_statuses = requests.get(
             ENDPOINT,
             headers=HEADERS,
-            params={'from_date': timestamp - DAYS_30}
+            params={'from_date': int(time.time()) - DAYS_30}
         )
     except Exception as error:
         logger.error(f'Ошибка запроса к основному API адресу: {error}')
@@ -165,6 +190,23 @@ def parse_status(homework):
 
     return f'Изменился статус проверки работы "{homework_name}". {verdict}'
 
+def check_tokens():
+    """.
+
+    Функция проверки наличия переменных окружения
+    необходимых для работы программы.
+    """
+    tokens = {
+        'TELEGRAM_TOKEN': TELEGRAM_TOKEN,
+        'PRACTICUM_TOKEN': PRACTICUM_TOKEN,
+        'TELEGRAM_CHAT_ID': TELEGRAM_CHAT_ID
+    }
+    token = [key for key in TOKENS if not tokens[key]]
+    if token != []:
+        logging.error((f'Недоступны переменные окружения: {tokens}'))
+        return False
+    return True
+   
 
 def main():
     """.
@@ -175,14 +217,18 @@ def main():
     функциям, а также проверяем наличие ошибок уровня логирования ERROR и
     отправляем их сообщением в телеграмм.
     """
-    bot = TeleBot(token=TELEGRAM_TOKEN)
-    timestamp = int(time.time())
-    availability_tokens = check_tokens()
-    if not availability_tokens:
+    if not check_tokens():
         logger.critical(
             'Отсутствие переменных окружения во время запуска бота'
         )
         sys.exit()
+    bot = TeleBot(token=TELEGRAM_TOKEN)
+    timestamp = int(time.time())
+    # if not check_tokens():
+    #     logger.critical(
+    #         'Отсутствие переменных окружения во время запуска бота'
+    #     )
+    #     sys.exit()
 
     while True:
         try:
