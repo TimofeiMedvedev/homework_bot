@@ -29,11 +29,13 @@ class ConnectionError(Exception):
 
 class SendMessageTelegram(Exception):
     """Ошибка запроса в телеграмм на нашем сервере."""
+
     pass
 
 
 class SendTelegram(Exception):
-    
+    """Ошибка при отправке сообщений в Telegram."""
+
     pass
 
 
@@ -43,12 +45,6 @@ TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 FAILURE_TO_SEND_MESSAGE = '{error}, {message}'
 
 HEADERS = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
-
-DICT_API = {
-    'url': ENDPOINT,
-    'headers': HEADERS,
-    'params': {'from_date': int(time.time()) - DAYS_30}
-}
 
 
 logger = logging.getLogger(__name__)
@@ -95,14 +91,14 @@ def send_message(bot, message):
     """
     try:
         bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message)
-    
+
     except telebot.apihelper.ApiException and requests.RequestException:
         raise SendMessageTelegram(
             'Ошибка отправки сообщения в Telegram со стороны нашего сервера'
         )
 
     except Exception as error:
-        raise SendMessageTelegram(
+        raise SendTelegram(
             f'сбой при отправке сообщения в Telegram: {error}'
         )
     else:
@@ -111,7 +107,7 @@ def send_message(bot, message):
     logger.debug('Сообщение успешно отправлено в Telegram')
 
 
-def get_api_answer(timestamp):
+def get_api_answer(now_timestamp):
     """.
 
     Функция делает запрос к единственному эндпоинту API-сервиса. В качестве
@@ -120,17 +116,24 @@ def get_api_answer(timestamp):
     Python. Внутри функции делается проверка на ошибку запроса к основному API
     и проверка на ошибку кода ответа НТТP отличного от 200.
     """
+    timestamp = now_timestamp
+    dict_api = dict(
+        url=ENDPOINT,
+        headers=HEADERS,
+        params={'from_date': timestamp}
+    )
     try:
-        homework_statuses = requests.get(**DICT_API)
-    except Exception as error:
+        homework_statuses = requests.get(**dict_api)
+    except requests.exceptions.RequestException as error:
         raise ConnectionError(
-            f'Ошибка запроса к основному API адресу: {error}'
+            f'Ошибка запроса к основному API адресу: {error}',
+            **dict_api
         )
     if homework_statuses.status_code != HTTPStatus.OK:
         raise requests.exceptions.HTTPError(
             f'API возвращяет код отличный от 200: '
             f'{homework_statuses.status_code}',
-            **DICT_API
+            **dict_api
         )
     return homework_statuses.json()
 
@@ -144,21 +147,18 @@ def check_response(response):
     последняя работа даже если список пустой. Также внутри выполняется
     проверка на соответствие ключу homeworks.
     """
-    
-    # if 'homeworks' not in response:
-    #     raise KeyError('отсутствие ожидаемых ключей в ответе API')
     try:
         homeworks_list = response['homeworks']
     except KeyError:
         raise KeyError('отсутствие ожидаемых ключей в ответе API')
     if homeworks_list == []:
         raise IndexError('Пустой список')
-    
+
     if not isinstance(homeworks_list, list):
         raise TypeError(
             'type(homeworks_list) must be list'
         )
-    
+
     if not isinstance(response, dict):
         raise TypeError(
             'type(responce) must be dict'
@@ -190,7 +190,7 @@ def parse_status(homework):
     verdict = HOMEWORK_VERDICTS[status_homework]
 
     return f'Изменился статус проверки работы "{homework_name}". {verdict}'
- 
+
 
 def main():
     """.
@@ -208,14 +208,14 @@ def main():
             f'{tokens_not}'
         )
         sys.exit()
-    
+
     bot = TeleBot(token=TELEGRAM_TOKEN)
-    timestamp = int(time.time())
-    error_str = ''
+    now_timestamp = int(time.time()) - DAYS_30
+    previous_str = ''
 
     while True:
         try:
-            response = get_api_answer(timestamp)
+            response = get_api_answer(now_timestamp)
             pprint(response)
             homework = check_response(response)
             pprint(homework)
@@ -228,12 +228,12 @@ def main():
         except Exception as error:
             logger.error(f'Сбой в работе программы: {error}')
             message = f'Сбой в работе программы: {error}'
-            if message != error_str:
+            if message != previous_str:
                 send_message(bot, message)
-                error_str = message
+                previous_str = message
         finally:
             time.sleep(RETRY_PERIOD)
-       
+
 
 if __name__ == '__main__':
     main()
