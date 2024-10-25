@@ -10,7 +10,6 @@ import os
 import sys
 import time
 from http import HTTPStatus
-from pprint import pprint
 
 import requests
 from dotenv import load_dotenv
@@ -24,19 +23,13 @@ load_dotenv()
 class ConnectionError(Exception):
     """Ошибка запроса к API."""
 
-    pass
-
 
 class SendMessageTelegram(Exception):
-    """Ошибка запроса в телеграмм на нашем сервере."""
-
-    pass
+    """Ошибка запроса в телеграмм."""
 
 
 class SendTelegram(Exception):
     """Ошибка при отправке сообщений в Telegram."""
-
-    pass
 
 
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
@@ -92,19 +85,15 @@ def send_message(bot, message):
     try:
         bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message)
 
-    except telebot.apihelper.ApiException and requests.RequestException:
-        raise SendMessageTelegram(
-            'Ошибка отправки сообщения в Telegram со стороны нашего сервера'
-        )
+    except telebot.apihelper.ApiException:
+        raise SendMessageTelegram('Ошибка со стороны Telegram')
 
     except Exception as error:
         raise SendTelegram(
             f'сбой при отправке сообщения в Telegram: {error}'
         )
     else:
-        True
-
-    logger.debug('Сообщение успешно отправлено в Telegram')
+        logger.debug('Сообщение успешно отправлено в Telegram')
 
 
 def get_api_answer(now_timestamp):
@@ -124,7 +113,7 @@ def get_api_answer(now_timestamp):
     )
     try:
         homework_statuses = requests.get(**dict_api)
-    except requests.exceptions.RequestException as error:
+    except Exception as error:
         raise ConnectionError(
             f'Ошибка запроса к основному API адресу: {error}',
             **dict_api
@@ -151,17 +140,17 @@ def check_response(response):
         homeworks_list = response['homeworks']
     except KeyError:
         raise KeyError('отсутствие ожидаемых ключей в ответе API')
-    if homeworks_list == []:
+    if not homeworks_list:
         raise IndexError('Пустой список')
 
     if not isinstance(homeworks_list, list):
         raise TypeError(
-            'type(homeworks_list) must be list'
+            f'{type(homeworks_list)} type(homeworks_list) must be list'
         )
 
     if not isinstance(response, dict):
         raise TypeError(
-            'type(responce) must be dict'
+            f'{type(response)} type(responce) must be dict',
         )
     homework_new = homeworks_list[0]
 
@@ -202,7 +191,7 @@ def main():
     отправляем их сообщением в телеграмм.
     """
     tokens_not = check_tokens()
-    if tokens_not != []:
+    if tokens_not:
         logger.critical(
             f'Отсутствие переменных окружения во время запуска бота: '
             f'{tokens_not}'
@@ -216,18 +205,19 @@ def main():
     while True:
         try:
             response = get_api_answer(now_timestamp)
-            pprint(response)
             homework = check_response(response)
-            pprint(homework)
             message = parse_status(homework)
             send_message(bot, message)
 
         except IndexError:
-            logger.debug('Список пустой')
+            logger.debug('Список пуст')
+
+        except SendMessageTelegram:
+            logger.error('Сбой отправки сообщения в Telegram')
 
         except Exception as error:
-            logger.error(f'Сбой в работе программы: {error}')
             message = f'Сбой в работе программы: {error}'
+            logger.error(message)
             if message != previous_str:
                 send_message(bot, message)
                 previous_str = message
